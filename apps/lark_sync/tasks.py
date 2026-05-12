@@ -109,10 +109,23 @@ def _process_lark_file(client, file_info, folder, fingerprint, config, existing)
     client.download_file(file_token, dest_path)
     logger.info("Downloaded: %s -> %s", file_name, dest_path)
 
-    # Non-platform tags become hashtags in the caption
+    # Generate AI caption (or fallback to hashtags from non-platform tags)
     platform_set = set(target_platforms)
-    caption_tags = [t for t in tags if t not in platform_set]
-    caption = " ".join(f"#{t}" for t in caption_tags)
+    content_tags = [t for t in tags if t not in platform_set]
+
+    from providers.ai_caption import generate_caption
+
+    # Generate one caption per platform (tone differs per platform)
+    captions_by_platform: dict[str, str] = {}
+    for platform in target_platforms:
+        captions_by_platform[platform] = generate_caption(
+            file_name=file_name,
+            platform=platform,
+            tags=content_tags,
+        )
+
+    # Use the first platform's caption as the default post caption
+    caption = next(iter(captions_by_platform.values()), "")
 
     post = _create_post_for_file(
         workspace=config.workspace,
@@ -120,6 +133,7 @@ def _process_lark_file(client, file_info, folder, fingerprint, config, existing)
         file_name=file_name,
         caption=caption,
         target_platforms=target_platforms,
+        captions_by_platform=captions_by_platform,
     )
 
     if existing:
@@ -143,7 +157,10 @@ def _process_lark_file(client, file_info, folder, fingerprint, config, existing)
     return 1
 
 
-def _create_post_for_file(workspace, file_path, file_name, caption, target_platforms):
+def _create_post_for_file(
+    workspace, file_path, file_name, caption, target_platforms,
+    captions_by_platform: dict | None = None,
+):
     """Create Post + MediaAsset + PlatformPosts scheduled for immediate publish."""
     from django.core.files import File
 
@@ -151,6 +168,8 @@ def _create_post_for_file(workspace, file_path, file_name, caption, target_platf
     from apps.media_library.models import MediaAsset
     from apps.publisher.models import PlatformPost
     from apps.social_accounts.models import SocialAccount
+
+    captions_by_platform = captions_by_platform or {}
 
     post = Post.objects.create(
         workspace=workspace,
@@ -172,6 +191,7 @@ def _create_post_for_file(workspace, file_path, file_name, caption, target_platf
     PostMediaAttachment.objects.create(post=post, media_asset=asset, position=0)
 
     for platform in target_platforms:
+        platform_caption = captions_by_platform.get(platform, caption)
         for account in SocialAccount.objects.filter(
             workspace=workspace,
             platform=platform,
@@ -182,6 +202,8 @@ def _create_post_for_file(workspace, file_path, file_name, caption, target_platf
                 social_account=account,
                 scheduled_at=timezone.now(),
                 status="scheduled",
+                # Store per-platform AI caption in platform_extra
+                platform_extra={"ai_caption": platform_caption},
             )
 
     return post
