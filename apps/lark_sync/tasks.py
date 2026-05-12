@@ -164,7 +164,7 @@ def _create_post_for_file(
     """Create Post + MediaAsset + PlatformPosts scheduled for immediate publish."""
     from django.core.files import File
 
-    from apps.composer.models import Post, PostMediaAttachment
+    from apps.composer.models import Post, PostMedia
     from apps.media_library.models import MediaAsset
     from apps.publisher.models import PlatformPost
     from apps.social_accounts.models import SocialAccount
@@ -188,7 +188,8 @@ def _create_post_for_file(
         )
         asset.file.save(file_name, File(fh), save=True)
 
-    PostMediaAttachment.objects.create(post=post, media_asset=asset, position=0)
+    # PostMedia is the correct model name (related_name="media_attachments" on Post)
+    PostMedia.objects.create(post=post, media_asset=asset, position=0)
 
     for platform in target_platforms:
         platform_caption = captions_by_platform.get(platform, caption)
@@ -202,8 +203,9 @@ def _create_post_for_file(
                 social_account=account,
                 scheduled_at=timezone.now(),
                 status="scheduled",
-                # Store per-platform AI caption in platform_extra
-                platform_extra={"ai_caption": platform_caption},
+                # platform_specific_caption is read by effective_caption
+                # which the publisher engine uses — this is how AI caption flows through
+                platform_specific_caption=platform_caption,
             )
 
     return post
