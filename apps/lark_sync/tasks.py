@@ -136,10 +136,14 @@ def _process_lark_file(client, file_info, folder, fingerprint, config, existing)
         captions_by_platform=captions_by_platform,
     )
 
+    # Upload to Telegram for long-term cloud storage (free, unlimited)
+    tg_ref = _upload_to_telegram(dest_path, file_name, caption)
+
     if existing:
         existing.fingerprint = fingerprint
         existing.resolved_platforms = target_platforms
         existing.post = post
+        existing.telegram_storage = tg_ref
         existing.save()
     else:
         ProcessedLarkFile.objects.create(
@@ -151,10 +155,31 @@ def _process_lark_file(client, file_info, folder, fingerprint, config, existing)
             resolved_platforms=target_platforms,
             watch_config=config,
             post=post,
+            telegram_storage=tg_ref,
         )
+
+    # Supabase auto-cleanup: purge oldest records if storage >= 80%
+    try:
+        from .cleanup import needs_cleanup, run_cleanup
+        if needs_cleanup():
+            run_cleanup()
+    except Exception:
+        logger.exception("Supabase cleanup failed (non-fatal)")
 
     logger.info("Queued '%s' -> %s", file_name, ", ".join(target_platforms))
     return 1
+
+
+def _upload_to_telegram(file_path: str, file_name: str, caption: str) -> dict:
+    """Upload media to Telegram storage channel. Returns ref dict (empty on failure)."""
+    try:
+        from providers.telegram_storage import upload_media
+        ref = upload_media(file_path, caption=f"[brightbean] {file_name}")
+        logger.info("Uploaded '%s' to Telegram (msg_id=%s)", file_name, ref.get("message_id"))
+        return ref
+    except Exception:
+        logger.warning("Telegram upload failed for '%s' (non-fatal)", file_name, exc_info=True)
+        return {}
 
 
 def _create_post_for_file(

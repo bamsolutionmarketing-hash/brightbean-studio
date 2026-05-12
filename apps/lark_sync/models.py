@@ -46,7 +46,10 @@ class ProcessedLarkFile(models.Model):
         blank=True,
         related_name="lark_source",
     )
+    # Telegram cloud storage reference: {"message_id": int, "file_id": str, "channel_id": str}
+    telegram_storage = models.JSONField(default=dict, blank=True)
     processed_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.file_name} ({', '.join(self.resolved_platforms)})"
