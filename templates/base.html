@@ -830,9 +830,9 @@
     {% include "onboarding/partials/_checklist.html" %}
 
     {% else %}
-    <main class="auth-bg min-h-screen flex items-center justify-center py-12 px-4" style="font-family: var(--font-body);">
+    <div class="auth-bg" style="font-family: var(--font-body); min-height: 100vh;">
         {% block auth_content %}{% endblock %}
-    </main>
+    </div>
     {% endif %}
 
     <!-- Vendored JS -->
