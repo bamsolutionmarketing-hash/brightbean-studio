@@ -26,6 +26,76 @@ PLATFORM_PRESETS = [
 PRESET_BY_KEY = {p["key"]: p for p in PLATFORM_PRESETS}
 
 
+GROUP_COLOR_CHOICES = [
+    ("orange",  "Orange"),
+    ("pink",    "Pink"),
+    ("blue",    "Blue"),
+    ("green",   "Green"),
+    ("purple",  "Purple"),
+    ("amber",   "Amber"),
+    ("teal",    "Teal"),
+    ("stone",   "Stone"),
+]
+
+
+class TeamToolGroup(models.Model):
+    """A collection of tools restricted to specific workspace members."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        on_delete=models.CASCADE,
+        related_name="tool_groups",
+    )
+    name = models.CharField(max_length=120)
+    description = models.CharField(max_length=300, blank=True, default="")
+    icon_emoji = models.CharField(max_length=8, default="📁")
+    color = models.CharField(max_length=20, choices=GROUP_COLOR_CHOICES, default="orange")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="created_tool_groups",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        indexes = [models.Index(fields=["workspace"])]
+        unique_together = [("workspace", "name")]
+
+    def __str__(self):
+        return self.name
+
+
+class TeamToolGroupAccess(models.Model):
+    """Grants a user access to a tool group."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group = models.ForeignKey(TeamToolGroup, on_delete=models.CASCADE, related_name="access_grants")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tool_group_grants",
+    )
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="granted_tool_group_access",
+    )
+    granted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("group", "user")]
+        indexes = [models.Index(fields=["user"])]
+
+    def __str__(self):
+        return f"{self.user} → {self.group}"
+
+
 class TeamTool(models.Model):
     """A shared third-party account (cookies stored encrypted)."""
 
@@ -34,6 +104,13 @@ class TeamTool(models.Model):
         "workspaces.Workspace",
         on_delete=models.CASCADE,
         related_name="team_tools",
+    )
+    group = models.ForeignKey(
+        TeamToolGroup,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="tools",
+        help_text="If null, tool is public to all workspace members.",
     )
     name = models.CharField(max_length=120)
     platform_key = models.CharField(max_length=40, default="custom")

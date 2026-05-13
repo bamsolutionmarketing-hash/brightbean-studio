@@ -16,7 +16,14 @@ from django_ratelimit.decorators import ratelimit
 
 from apps.members.decorators import require_permission
 
-from .models import PLATFORM_PRESETS, PRESET_BY_KEY, TeamTool, TeamToolUsageLog
+from .models import (
+    PLATFORM_PRESETS,
+    PRESET_BY_KEY,
+    TeamTool,
+    TeamToolGroup,
+    TeamToolGroupAccess,
+    TeamToolUsageLog,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,23 +42,76 @@ def _get_tool(workspace_id, tool_id) -> TeamTool:
 # ------------------------------------------------------------------
 # List (any workspace member)
 # ------------------------------------------------------------------
-@login_required
-def tool_list(request, workspace_id):
-    tools = (
-        TeamTool.objects
-        .filter(workspace_id=workspace_id, is_active=True)
-        .select_related("current_user")
-        .order_by("name")
-    )
-    can_manage = (
+def _user_can_manage(request) -> bool:
+    return bool(
         request.workspace_membership
         and request.workspace_membership.effective_permissions.get("manage_workspace_settings", False)
     )
+
+
+def _visible_tool_ids(request, workspace_id) -> set:
+    """Return the set of TeamTool ids the current user is allowed to see.
+
+    Admins see everything. Members see:
+      - All tools without a group (public)
+      - All tools in groups they have explicit access to
+    """
+    if _user_can_manage(request):
+        return set(
+            TeamTool.objects
+            .filter(workspace_id=workspace_id, is_active=True)
+            .values_list("id", flat=True)
+        )
+
+    public_ids = TeamTool.objects.filter(
+        workspace_id=workspace_id, is_active=True, group__isnull=True,
+    ).values_list("id", flat=True)
+
+    allowed_group_ids = TeamToolGroupAccess.objects.filter(
+        user=request.user, group__workspace_id=workspace_id,
+    ).values_list("group_id", flat=True)
+
+    group_tool_ids = TeamTool.objects.filter(
+        workspace_id=workspace_id, is_active=True, group_id__in=allowed_group_ids,
+    ).values_list("id", flat=True)
+
+    return set(public_ids) | set(group_tool_ids)
+
+
+@login_required
+def tool_list(request, workspace_id):
+    can_manage = _user_can_manage(request)
+    visible_ids = _visible_tool_ids(request, workspace_id)
+
+    tools = (
+        TeamTool.objects
+        .filter(id__in=visible_ids)
+        .select_related("current_user", "group")
+        .order_by("group__name", "name")
+    )
+
+    # Bucket tools into sections: each visible group + a "public" section.
+    if can_manage:
+        groups = list(TeamToolGroup.objects.filter(workspace_id=workspace_id).order_by("name"))
+    else:
+        allowed = TeamToolGroupAccess.objects.filter(
+            user=request.user, group__workspace_id=workspace_id,
+        ).values_list("group_id", flat=True)
+        groups = list(TeamToolGroup.objects.filter(id__in=allowed).order_by("name"))
+
+    sections = []
+    for g in groups:
+        section_tools = [t for t in tools if t.group_id == g.id]
+        sections.append({"group": g, "tools": section_tools})
+    public_tools = [t for t in tools if t.group_id is None]
+
     return render(request, "tools/list.html", {
         "workspace_id": workspace_id,
-        "tools": tools,
+        "sections": sections,
+        "public_tools": public_tools,
+        "all_groups": groups,
         "presets": PLATFORM_PRESETS,
-        "can_manage": bool(can_manage),
+        "can_manage": can_manage,
         "now": timezone.now(),
     })
 
@@ -91,8 +151,14 @@ def tool_upload(request, workspace_id):
         messages.error(request, f"Invalid cookies JSON: {exc}")
         return redirect("tools:list", workspace_id=workspace_id)
 
+    group_id = (request.POST.get("group_id") or "").strip()
+    group = None
+    if group_id:
+        group = TeamToolGroup.objects.filter(id=group_id, workspace_id=workspace_id).first()
+
     TeamTool.objects.create(
         workspace_id=workspace_id,
+        group=group,
         name=name,
         platform_key=platform_key,
         url=url,
@@ -157,6 +223,17 @@ def tool_launch(request, workspace_id, tool_id):
         raise PermissionDenied("Not a workspace member.")
 
     tool = _get_tool(workspace_id, tool_id)
+
+    # Group-based access check: admins bypass; members need group access or public tool.
+    if not _user_can_manage(request) and tool.group_id is not None:
+        has_access = TeamToolGroupAccess.objects.filter(
+            group_id=tool.group_id, user=request.user,
+        ).exists()
+        if not has_access:
+            return JsonResponse(
+                {"ok": False, "error": "Bạn không có quyền dùng tool này."},
+                status=403,
+            )
 
     if tool.is_in_use and tool.current_user_id != request.user.id:
         return JsonResponse(
@@ -276,3 +353,159 @@ def _auto_finish_log(log_id, *, forced: bool, notes: str) -> None:
     log.forced_return = forced
     log.notes = (log.notes + " " + notes).strip()[:300]
     log.save(update_fields=["returned_at", "duration_seconds", "forced_return", "notes"])
+
+
+# ------------------------------------------------------------------
+# Groups: list / create / edit / delete (admin)
+# ------------------------------------------------------------------
+@login_required
+@require_permission("manage_workspace_settings")
+def group_list(request, workspace_id):
+    groups = (
+        TeamToolGroup.objects
+        .filter(workspace_id=workspace_id)
+        .prefetch_related("tools", "access_grants__user")
+        .order_by("name")
+    )
+    return render(request, "tools/groups.html", {
+        "workspace_id": workspace_id,
+        "groups": groups,
+    })
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def group_create(request, workspace_id):
+    name = (request.POST.get("name") or "").strip()
+    icon_emoji = (request.POST.get("icon_emoji") or "📁").strip()[:8]
+    color = (request.POST.get("color") or "orange").strip()
+    description = (request.POST.get("description") or "").strip()[:300]
+
+    if not name:
+        messages.error(request, "Tên group là bắt buộc.")
+        return redirect("tools:group_list", workspace_id=workspace_id)
+
+    if TeamToolGroup.objects.filter(workspace_id=workspace_id, name=name).exists():
+        messages.error(request, f"Group '{name}' đã tồn tại.")
+        return redirect("tools:group_list", workspace_id=workspace_id)
+
+    group = TeamToolGroup.objects.create(
+        workspace_id=workspace_id,
+        name=name,
+        icon_emoji=icon_emoji,
+        color=color,
+        description=description,
+        created_by=request.user,
+    )
+    messages.success(request, f"Đã tạo group '{name}'.")
+    return redirect("tools:group_manage", workspace_id=workspace_id, group_id=group.id)
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+def group_manage(request, workspace_id, group_id):
+    from apps.members.models import WorkspaceMembership
+
+    group = get_object_or_404(TeamToolGroup, id=group_id, workspace_id=workspace_id)
+
+    # Tools currently in this group + tools without a group (candidates to add)
+    tools_in_group = group.tools.filter(is_active=True).order_by("name")
+    candidate_tools = TeamTool.objects.filter(
+        workspace_id=workspace_id, is_active=True,
+    ).exclude(group=group).order_by("name")
+
+    # Users in workspace + which already have access
+    memberships = (
+        WorkspaceMembership.objects
+        .filter(workspace_id=workspace_id, workspace__is_archived=False)
+        .select_related("user")
+    )
+    granted_user_ids = set(
+        group.access_grants.values_list("user_id", flat=True)
+    )
+    members_with_access = [m for m in memberships if m.user_id in granted_user_ids]
+    members_without_access = [m for m in memberships if m.user_id not in granted_user_ids]
+
+    return render(request, "tools/group_manage.html", {
+        "workspace_id": workspace_id,
+        "group": group,
+        "tools_in_group": tools_in_group,
+        "candidate_tools": candidate_tools,
+        "members_with_access": members_with_access,
+        "members_without_access": members_without_access,
+    })
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def group_edit(request, workspace_id, group_id):
+    group = get_object_or_404(TeamToolGroup, id=group_id, workspace_id=workspace_id)
+    name = (request.POST.get("name") or "").strip()
+    if name:
+        group.name = name
+    group.description = (request.POST.get("description") or "").strip()[:300]
+    group.icon_emoji = (request.POST.get("icon_emoji") or group.icon_emoji)[:8]
+    group.color = (request.POST.get("color") or group.color).strip()
+    group.save()
+    messages.success(request, "Đã lưu thay đổi.")
+    return redirect("tools:group_manage", workspace_id=workspace_id, group_id=group.id)
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def group_delete(request, workspace_id, group_id):
+    group = get_object_or_404(TeamToolGroup, id=group_id, workspace_id=workspace_id)
+    # Tools in this group revert to public (group set to NULL by SET_NULL).
+    group_name = group.name
+    group.delete()
+    messages.success(request, f"Đã xoá group '{group_name}'. Các tools bên trong trở thành public.")
+    return redirect("tools:group_list", workspace_id=workspace_id)
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def group_grant(request, workspace_id, group_id):
+    group = get_object_or_404(TeamToolGroup, id=group_id, workspace_id=workspace_id)
+    user_id = (request.POST.get("user_id") or "").strip()
+    if not user_id:
+        return redirect("tools:group_manage", workspace_id=workspace_id, group_id=group.id)
+
+    TeamToolGroupAccess.objects.get_or_create(
+        group=group, user_id=user_id,
+        defaults={"granted_by": request.user},
+    )
+    return redirect("tools:group_manage", workspace_id=workspace_id, group_id=group.id)
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def group_revoke(request, workspace_id, group_id):
+    group = get_object_or_404(TeamToolGroup, id=group_id, workspace_id=workspace_id)
+    user_id = (request.POST.get("user_id") or "").strip()
+    if user_id:
+        TeamToolGroupAccess.objects.filter(group=group, user_id=user_id).delete()
+    return redirect("tools:group_manage", workspace_id=workspace_id, group_id=group.id)
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def tool_assign_group(request, workspace_id, tool_id):
+    """Move a tool into a group, or remove it (set group_id=''). """
+    tool = _get_tool(workspace_id, tool_id)
+    group_id = (request.POST.get("group_id") or "").strip()
+    if group_id:
+        group = get_object_or_404(TeamToolGroup, id=group_id, workspace_id=workspace_id)
+        tool.group = group
+    else:
+        tool.group = None
+    tool.save(update_fields=["group", "updated_at"])
+    redirect_to = request.POST.get("redirect_to") or "tools:list"
+    if redirect_to == "tools:group_manage" and tool.group_id:
+        return redirect("tools:group_manage", workspace_id=workspace_id, group_id=tool.group_id)
+    return redirect("tools:list", workspace_id=workspace_id)

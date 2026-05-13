@@ -10,6 +10,11 @@
     <div class="flex-1 min-w-0">
       <h3 class="text-sm font-semibold text-stone-900 truncate">{{ tool.name }}</h3>
       <p class="text-xs text-stone-400 mt-0.5 truncate">{{ tool.url }}</p>
+      {% if tool.group %}
+      <span class="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-stone-100 text-stone-600">
+        {{ tool.group.icon_emoji }} {{ tool.group.name }}
+      </span>
+      {% endif %}
       {% if tool.description %}
       <p class="text-xs text-stone-500 mt-1 line-clamp-2">{{ tool.description }}</p>
       {% endif %}

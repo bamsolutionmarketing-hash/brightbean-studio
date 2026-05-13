@@ -18,6 +18,10 @@
     </div>
     {% if can_manage %}
     <div class="flex items-center gap-2">
+      <a href="{% url 'tools:group_list' workspace_id=workspace_id %}"
+         class="px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 rounded-full border border-stone-200">
+        Groups
+      </a>
       <a href="{% url 'tools:history' workspace_id=workspace_id %}"
          class="px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 rounded-full border border-stone-200">
         History
@@ -50,20 +54,53 @@
     </div>
   </template>
 
-  {% if tools %}
-  <!-- Tool grid -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    {% for tool in tools %}
-    {% include "tools/_tool_card.html" with tool=tool can_manage=can_manage workspace_id=workspace_id %}
+  {% if sections or public_tools %}
+
+    {% for section in sections %}
+    <div class="mb-8">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xl">{{ section.group.icon_emoji }}</span>
+        <h2 class="text-base font-bold text-stone-800">{{ section.group.name }}</h2>
+        <span class="text-xs text-stone-400">·  {{ section.tools|length }} tool{{ section.tools|length|pluralize }}</span>
+        {% if can_manage %}
+        <a href="{% url 'tools:group_manage' workspace_id=workspace_id group_id=section.group.id %}"
+           class="ml-auto text-xs text-stone-500 hover:text-stone-800">Quản lý →</a>
+        {% endif %}
+      </div>
+      {% if section.tools %}
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for tool in section.tools %}
+        {% include "tools/_tool_card.html" with tool=tool can_manage=can_manage workspace_id=workspace_id %}
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-xs text-stone-400 italic">Chưa có tool nào trong nhóm này.</p>
+      {% endif %}
+    </div>
     {% endfor %}
-  </div>
+
+    {% if public_tools %}
+    <div class="mb-8">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xl">🔓</span>
+        <h2 class="text-base font-bold text-stone-800">Public</h2>
+        <span class="text-xs text-stone-400">·  mọi member đều dùng được</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for tool in public_tools %}
+        {% include "tools/_tool_card.html" with tool=tool can_manage=can_manage workspace_id=workspace_id %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
   {% else %}
   <div class="bg-white rounded-xl border border-stone-200 p-12 text-center">
     <div class="text-5xl mb-3">🧰</div>
     <h3 class="text-base font-semibold text-stone-900 mb-1">Chưa có tool nào</h3>
     <p class="text-sm text-stone-500 mb-4">
       {% if can_manage %}Thêm tool đầu tiên — paste cookies từ J2TEAM extension.
-      {% else %}Admin chưa thêm tool nào.{% endif %}
+      {% else %}Bạn chưa được cấp quyền dùng tool nào. Liên hệ admin để được thêm vào group.{% endif %}
     </p>
     {% if can_manage %}
     <button type="button" @click="showUpload = true"
@@ -75,7 +112,7 @@
   {% endif %}
 
   {% if can_manage %}
-  {% include "tools/_upload_modal.html" with presets=presets workspace_id=workspace_id %}
+  {% include "tools/_upload_modal.html" with presets=presets workspace_id=workspace_id all_groups=all_groups %}
   {% endif %}
 </div>
 
