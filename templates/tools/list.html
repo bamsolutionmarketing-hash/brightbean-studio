@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% load static %}
+{% block page_title %}Team Tools{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto p-6" x-data="toolsPage()">
+
+  <!-- Header -->
+  <div class="flex items-start justify-between mb-6">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <h1 class="text-2xl font-bold text-stone-900">🧰 Team Tools</h1>
+        <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-stone-100 text-stone-600 border border-stone-200">
+          Hardened
+        </span>
+      </div>
+      <p class="text-sm text-stone-500">Tài khoản dùng chung của team — dùng xong nhớ <strong>trả tài khoản</strong>.</p>
+    </div>
+    {% if can_manage %}
+    <div class="flex items-center gap-2">
+      <a href="{% url 'tools:history' workspace_id=workspace_id %}"
+         class="px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 rounded-full border border-stone-200">
+        History
+      </a>
+      <button type="button" @click="showUpload = true"
+              class="px-4 py-1.5 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-pink-500 rounded-full hover:shadow-md">
+        + Add Tool
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Security note -->
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start gap-3 text-sm text-stone-700">
+    <span class="text-xl">🔒</span>
+    <div>
+      <strong>An toàn:</strong> Trình duyệt mở ra đã bị khoá — không thể cài extension,
+      không mở được DevTools, không xem được cookies. Mọi phiên dùng đều được ghi log.
+    </div>
+  </div>
+
+  <!-- Status banner -->
+  <template x-if="status">
+    <div class="mb-6 p-4 rounded-xl border" :class="{
+      'bg-blue-50 border-blue-200 text-blue-800': status.kind === 'info',
+      'bg-green-50 border-green-200 text-green-800': status.kind === 'ok',
+      'bg-red-50 border-red-200 text-red-800': status.kind === 'err'
+    }">
+      <span x-text="status.msg"></span>
+    </div>
+  </template>
+
+  {% if tools %}
+  <!-- Tool grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for tool in tools %}
+    {% include "tools/_tool_card.html" with tool=tool can_manage=can_manage workspace_id=workspace_id %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-xl border border-stone-200 p-12 text-center">
+    <div class="text-5xl mb-3">🧰</div>
+    <h3 class="text-base font-semibold text-stone-900 mb-1">Chưa có tool nào</h3>
+    <p class="text-sm text-stone-500 mb-4">
+      {% if can_manage %}Thêm tool đầu tiên — paste cookies từ J2TEAM extension.
+      {% else %}Admin chưa thêm tool nào.{% endif %}
+    </p>
+    {% if can_manage %}
+    <button type="button" @click="showUpload = true"
+            class="px-4 py-1.5 text-sm font-semibold text-white bg-orange-500 rounded-full hover:bg-orange-600">
+      + Add Tool
+    </button>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if can_manage %}
+  {% include "tools/_upload_modal.html" with presets=presets workspace_id=workspace_id %}
+  {% endif %}
+</div>
+
+<script nonce="{{ request.csp_nonce }}">
+function toolsPage() {
+  return {
+    status: null,
+    showUpload: false,
+    async launch(toolId) {
+      this.status = { kind: 'info', msg: 'Đang mở trình duyệt khoá…' };
+      const fd = new FormData();
+      fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+      const r = await fetch(`/tools/{{ workspace_id }}/${toolId}/launch/`, {
+        method: 'POST', body: fd, credentials: 'same-origin'
+      });
+      const data = await r.json();
+      if (data.ok) {
+        this.status = { kind: 'ok', msg: data.message };
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        this.status = { kind: 'err', msg: data.error || 'Không mở được.' };
+      }
+    },
+    async returnTool(toolId) {
+      if (!confirm('Trả tài khoản này? Phiên sẽ kết thúc và xoá cookies tạm.')) return;
+      const fd = new FormData();
+      fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+      const r = await fetch(`/tools/{{ workspace_id }}/${toolId}/return/`, {
+        method: 'POST', body: fd, credentials: 'same-origin'
+      });
+      const data = await r.json();
+      if (data.ok) { window.location.reload(); }
+      else { this.status = { kind: 'err', msg: data.error || 'Lỗi.' }; }
+    },
+    async forceReturn(toolId) {
+      if (!confirm('Force-return: ngắt phiên người đang dùng?')) return;
+      const fd = new FormData();
+      fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+      const r = await fetch(`/tools/{{ workspace_id }}/${toolId}/force-return/`, {
+        method: 'POST', body: fd, credentials: 'same-origin'
+      });
+      if ((await r.json()).ok) window.location.reload();
+    }
+  }
+}
+</script>
+{% endblock %}
