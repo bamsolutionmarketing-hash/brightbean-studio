@@ -17,6 +17,16 @@ urlpatterns = [
         name="connect",
     ),
     path(
+        "<uuid:workspace_id>/quick-connect/",
+        views.quick_connect,
+        name="quick_connect",
+    ),
+    path(
+        "<uuid:workspace_id>/quick-connect/launch/",
+        views.quick_connect_launch,
+        name="quick_connect_launch",
+    ),
+    path(
         "<uuid:workspace_id>/connect/bluesky/",
         views.connect_bluesky,
         name="connect_bluesky",

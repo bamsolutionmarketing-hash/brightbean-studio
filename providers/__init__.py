@@ -10,16 +10,24 @@ from typing import TYPE_CHECKING
 
 from .bluesky import BlueskyProvider
 from .facebook import FacebookProvider
+from .facebook_browser import FacebookBrowserProvider
 from .google_business import GoogleBusinessProvider
+from .google_business_browser import GoogleBusinessBrowserProvider
 from .instagram import InstagramProvider
+from .instagram_browser import InstagramBrowserProvider
 from .instagram_login import InstagramLoginProvider
+from .linkedin_browser import LinkedInBrowserProvider
 from .linkedin_company import LinkedInCompanyProvider
 from .linkedin_personal import LinkedInPersonalProvider
 from .mastodon import MastodonProvider
 from .pinterest import PinterestProvider
+from .pinterest_browser import PinterestBrowserProvider
 from .threads import ThreadsProvider
+from .threads_browser import ThreadsBrowserProvider
 from .tiktok import TikTokProvider
+from .tiktok_browser import TikTokBrowserProvider
 from .youtube import YouTubeProvider
+from .youtube_browser import YouTubeBrowserProvider
 
 if TYPE_CHECKING:
     from .base import SocialProvider
@@ -38,6 +46,30 @@ PROVIDER_REGISTRY: dict[str, type[SocialProvider]] = {
     "google_business": GoogleBusinessProvider,
     "mastodon": MastodonProvider,
 }
+
+# Browser-automation providers (no OAuth required — log in once, sessions persist).
+# Keys here intentionally match PROVIDER_REGISTRY so the UI can offer "Quick Connect"
+# as a one-click alternative for any supported platform.
+BROWSER_PROVIDER_REGISTRY: dict[str, type[SocialProvider]] = {
+    "facebook": FacebookBrowserProvider,
+    "instagram": InstagramBrowserProvider,
+    "instagram_login": InstagramBrowserProvider,
+    "linkedin_personal": LinkedInBrowserProvider,
+    "linkedin_company": LinkedInBrowserProvider,
+    "tiktok": TikTokBrowserProvider,
+    "youtube": YouTubeBrowserProvider,
+    "pinterest": PinterestBrowserProvider,
+    "threads": ThreadsBrowserProvider,
+    "google_business": GoogleBusinessBrowserProvider,
+}
+
+
+def get_browser_provider(platform: str):
+    """Return a browser-automation provider for ``platform`` (no OAuth needed)."""
+    cls = BROWSER_PROVIDER_REGISTRY.get(platform)
+    if cls is None:
+        raise ValueError(f"No browser provider for platform: {platform}")
+    return cls(credentials={})
 
 
 def get_provider(platform: str, credentials: dict | None = None) -> SocialProvider:

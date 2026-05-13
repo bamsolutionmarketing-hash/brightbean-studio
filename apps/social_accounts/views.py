@@ -744,3 +744,77 @@ def _create_or_update_account(
         create_default_queue_and_slots(account)
 
     return account
+
+
+# ------------------------------------------------------------------
+# Quick Connect (browser-based, no OAuth credentials required)
+# ------------------------------------------------------------------
+@login_required
+@require_permission("manage_social_accounts")
+def quick_connect(request, workspace_id):
+    """Show the simple one-click 'log in via browser' grid."""
+    from providers import BROWSER_PROVIDER_REGISTRY
+
+    platforms = []
+    labels = dict(PlatformCredential.Platform.choices)
+    for key in BROWSER_PROVIDER_REGISTRY.keys():
+        platforms.append({"value": key, "label": labels.get(key, key.title())})
+
+    return render(
+        request,
+        "social_accounts/quick_connect.html",
+        {"workspace_id": workspace_id, "platforms": platforms},
+    )
+
+
+@login_required
+@require_permission("manage_social_accounts")
+@require_POST
+@ratelimit(key="user", rate="10/m", method="POST", block=True)
+def quick_connect_launch(request, workspace_id):
+    """Launch a Playwright browser window so the user can log in to the platform once.
+
+    The browser session is persisted to disk; afterwards the publisher can post
+    without any OAuth credentials. Returns a JSON status the front-end polls."""
+    import threading
+    import uuid as _uuid
+
+    from django.http import JsonResponse
+
+    from providers import get_browser_provider
+
+    platform = request.POST.get("platform", "").strip()
+    account_label = request.POST.get("account_label", "").strip() or platform
+
+    try:
+        provider = get_browser_provider(platform)
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "Unsupported platform"}, status=400)
+
+    account_id = str(_uuid.uuid4())
+
+    def _run():
+        try:
+            provider.setup_session(account_id)
+        except Exception as exc:  # noqa: BLE001 - background thread
+            import logging
+            logging.getLogger(__name__).exception("Quick connect failed: %s", exc)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+    # Create a stub SocialAccount so the user can see the new connection in the UI.
+    # status="connected" because the saved browser profile IS the credential.
+    SocialAccount.objects.create(
+        workspace_id=workspace_id,
+        platform=platform,
+        account_platform_id=account_id,
+        account_name=account_label,
+        oauth_access_token=account_id,  # browser providers use account_id as the "token"
+        connection_status=SocialAccount.ConnectionStatus.CONNECTED,
+    )
+
+    return JsonResponse({
+        "ok": True,
+        "account_id": account_id,
+        "message": "Browser window opened — log in once, then close the window.",
+    })

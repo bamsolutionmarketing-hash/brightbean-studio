@@ -12,6 +12,25 @@
         <p class="text-sm text-stone-500 mt-1">Select a platform to connect your social media account.</p>
     </div>
 
+    <!-- Quick Connect banner -->
+    <a href="{% url 'social_accounts:quick_connect' workspace_id=workspace_id %}"
+       class="block mb-6 group">
+      <div class="bg-gradient-to-r from-orange-500 to-pink-500 rounded-xl p-5 text-white flex items-center justify-between hover:shadow-lg transition-all">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-lg font-bold">⚡ Quick Connect</span>
+            <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-white/20 backdrop-blur">
+              Recommended
+            </span>
+          </div>
+          <p class="text-sm text-white/90">Skip the OAuth setup — log in once in a browser window. No API keys, no developer registration.</p>
+        </div>
+        <div class="text-2xl group-hover:translate-x-1 transition-transform">→</div>
+      </div>
+    </a>
+
+    <div class="text-xs text-stone-400 uppercase tracking-widest font-semibold mb-3">Or use OAuth (requires API credentials)</div>
+
     <!-- Platform grid -->
     <div class="overflow-y-auto pr-1">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
