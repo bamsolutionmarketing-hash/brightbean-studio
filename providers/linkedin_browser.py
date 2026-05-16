@@ -16,7 +16,7 @@ class LinkedInBrowserProvider(BrowserProvider):
     profile_name = "linkedin"
     max_caption_length = 3000
     supported_post_types = [PostType.IMAGE, PostType.VIDEO, PostType.TEXT]
-    supported_media_types = [MediaType.IMAGE, MediaType.VIDEO]
+    supported_media_types = [MediaType.JPEG, MediaType.PNG, MediaType.MP4]
     required_scopes = []
 
     LOGIN_URL = "https://www.linkedin.com/login"

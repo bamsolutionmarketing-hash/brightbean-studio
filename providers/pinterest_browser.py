@@ -16,7 +16,7 @@ class PinterestBrowserProvider(BrowserProvider):
     profile_name = "pinterest"
     max_caption_length = 500
     supported_post_types = [PostType.PIN, PostType.IMAGE, PostType.VIDEO]
-    supported_media_types = [MediaType.IMAGE, MediaType.VIDEO]
+    supported_media_types = [MediaType.JPEG, MediaType.PNG, MediaType.MP4]
     required_scopes = []
 
     LOGIN_URL = "https://www.pinterest.com/login/"

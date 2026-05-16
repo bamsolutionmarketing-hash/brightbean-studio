@@ -16,7 +16,7 @@ class TikTokBrowserProvider(BrowserProvider):
     profile_name = "tiktok"
     max_caption_length = 2200
     supported_post_types = [PostType.VIDEO, PostType.SHORT]
-    supported_media_types = [MediaType.VIDEO]
+    supported_media_types = [MediaType.MP4]
     required_scopes = []
 
     LOGIN_URL = "https://www.tiktok.com/login"

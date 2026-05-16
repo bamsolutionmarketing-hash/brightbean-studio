@@ -16,7 +16,7 @@ class YouTubeBrowserProvider(BrowserProvider):
     profile_name = "youtube"
     max_caption_length = 5000
     supported_post_types = [PostType.VIDEO, PostType.SHORT]
-    supported_media_types = [MediaType.VIDEO]
+    supported_media_types = [MediaType.MP4]
     required_scopes = []
 
     LOGIN_URL = "https://accounts.google.com/"

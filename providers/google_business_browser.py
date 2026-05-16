@@ -16,7 +16,7 @@ class GoogleBusinessBrowserProvider(BrowserProvider):
     profile_name = "google_business"
     max_caption_length = 1500
     supported_post_types = [PostType.IMAGE, PostType.TEXT]
-    supported_media_types = [MediaType.IMAGE]
+    supported_media_types = [MediaType.JPEG, MediaType.PNG]
     required_scopes = []
 
     LOGIN_URL = "https://accounts.google.com/"
