@@ -2,61 +2,87 @@
 {% block page_title %}Tools – Usage History{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto p-6">
-  <a href="{% url 'tools:list' workspace_id=workspace_id %}" class="text-sm text-stone-500 hover:text-stone-700 mb-4 inline-block">
-    ← Quay lại Tools
+<div class="max-w-6xl">
+
+  <a href="{% url 'tools:list' workspace_id=workspace_id %}"
+     class="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 transition-colors mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    Back to Tools
   </a>
 
-  <h1 class="text-2xl font-bold text-stone-900 mb-1">Lịch sử sử dụng</h1>
-  <p class="text-sm text-stone-500 mb-6">200 phiên gần nhất.</p>
+  <div class="mb-6 sm:mb-8">
+    <h2 class="text-xl font-semibold text-stone-900">Usage history</h2>
+    <p class="text-sm text-stone-500 mt-1">Last 200 sessions. Every launch and return is logged.</p>
+  </div>
 
   <div class="bg-white rounded-xl border border-stone-200 overflow-hidden">
+    {% if logs %}
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-stone-50 border-b border-stone-200">
-        <tr class="text-xs uppercase tracking-wider text-stone-500">
-          <th class="text-left px-4 py-3">User</th>
-          <th class="text-left px-4 py-3">Tool</th>
-          <th class="text-left px-4 py-3">Bắt đầu</th>
-          <th class="text-left px-4 py-3">Kết thúc</th>
-          <th class="text-left px-4 py-3">Thời gian</th>
-          <th class="text-left px-4 py-3">IP</th>
-          <th class="text-left px-4 py-3">Trạng thái</th>
+        <tr class="text-[11px] uppercase tracking-wider text-stone-500">
+          <th class="text-left px-4 py-3 font-semibold">User</th>
+          <th class="text-left px-4 py-3 font-semibold">Tool</th>
+          <th class="text-left px-4 py-3 font-semibold">Started</th>
+          <th class="text-left px-4 py-3 font-semibold">Ended</th>
+          <th class="text-left px-4 py-3 font-semibold">Duration</th>
+          <th class="text-left px-4 py-3 font-semibold">IP</th>
+          <th class="text-left px-4 py-3 font-semibold">Status</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="divide-y divide-stone-100">
         {% for log in logs %}
-        <tr class="border-b border-stone-100 hover:bg-stone-50">
-          <td class="px-4 py-3 text-stone-800 font-medium">
-            {% if log.user %}{{ log.user.name|default:log.user.email }}{% else %}<em class="text-stone-400">(deleted)</em>{% endif %}
+        <tr class="hover:bg-stone-50/50 transition-colors">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-semibold text-orange-700">
+                {% if log.user %}{{ log.user.name|default:log.user.email|slice:":1"|upper }}{% else %}?{% endif %}
+              </div>
+              <span class="text-stone-800 font-medium text-xs">
+                {% if log.user %}{{ log.user.name|default:log.user.email }}{% else %}<em class="text-stone-400">(deleted)</em>{% endif %}
+              </span>
+            </div>
           </td>
-          <td class="px-4 py-3 text-stone-700">{{ log.tool.icon_emoji }} {{ log.tool.name }}</td>
-          <td class="px-4 py-3 text-stone-500 text-xs">{{ log.started_at|date:"H:i d/m/Y" }}</td>
-          <td class="px-4 py-3 text-stone-500 text-xs">
-            {% if log.returned_at %}{{ log.returned_at|date:"H:i d/m/Y" }}{% else %}<span class="text-orange-600">Đang dùng</span>{% endif %}
+          <td class="px-4 py-3 text-xs text-stone-700">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="text-base">{{ log.tool.icon_emoji }}</span> {{ log.tool.name }}
+            </span>
           </td>
-          <td class="px-4 py-3 text-stone-600 text-xs">
+          <td class="px-4 py-3 text-xs text-stone-500 whitespace-nowrap">{{ log.started_at|date:"d M, H:i" }}</td>
+          <td class="px-4 py-3 text-xs text-stone-500 whitespace-nowrap">
+            {% if log.returned_at %}{{ log.returned_at|date:"d M, H:i" }}{% else %}<span class="text-orange-600 font-medium">in progress</span>{% endif %}
+          </td>
+          <td class="px-4 py-3 text-xs text-stone-600 whitespace-nowrap">
             {% if log.duration_seconds %}
-              {% with mins=log.duration_seconds|divisibleby:60 %}
-                {{ log.duration_seconds }}s
-              {% endwith %}
-            {% else %}-{% endif %}
+              {% if log.duration_seconds < 60 %}{{ log.duration_seconds }}s
+              {% elif log.duration_seconds < 3600 %}{{ log.duration_seconds|divisibleby:60 }}{{ log.duration_seconds }}s
+              {% else %}{{ log.duration_seconds }}s{% endif %}
+            {% else %}—{% endif %}
           </td>
-          <td class="px-4 py-3 text-stone-400 text-xs font-mono">{{ log.ip_address|default:"-" }}</td>
+          <td class="px-4 py-3 text-[11px] text-stone-400 font-mono whitespace-nowrap">{{ log.ip_address|default:"—" }}</td>
           <td class="px-4 py-3">
             {% if log.forced_return %}
-            <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-red-50 text-red-700">FORCED</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-red-50 text-red-700 border border-red-100">Forced</span>
             {% elif log.returned_at %}
-            <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-green-50 text-green-700">OK</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">Returned</span>
             {% else %}
-            <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-orange-50 text-orange-700">ACTIVE</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-orange-50 text-orange-700 border border-orange-100">Active</span>
             {% endif %}
           </td>
         </tr>
-        {% empty %}
-        <tr><td colspan="7" class="px-4 py-12 text-center text-stone-400">Chưa có phiên nào.</td></tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
+    {% else %}
+    <div class="text-center py-16 px-6">
+      <div class="mx-auto w-16 h-16 rounded-2xl bg-stone-50 flex items-center justify-center mb-5">
+        <svg class="w-8 h-8 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <h3 class="text-base font-semibold text-stone-900 mb-1">No sessions yet</h3>
+      <p class="text-sm text-stone-500">Activity will appear here as soon as members launch a tool.</p>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

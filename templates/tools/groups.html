@@ -2,101 +2,131 @@
 {% block page_title %}Tool Groups{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto p-6" x-data="{ showCreate: false }">
+<div class="max-w-4xl" x-data="{ showCreate: false }">
 
-  <a href="{% url 'tools:list' workspace_id=workspace_id %}" class="text-sm text-stone-500 hover:text-stone-700 mb-4 inline-block">
-    ← Quay lại Tools
+  <a href="{% url 'tools:list' workspace_id=workspace_id %}"
+     class="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 transition-colors mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    Back to Tools
   </a>
 
-  <div class="flex items-start justify-between mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
     <div>
-      <h1 class="text-2xl font-bold text-stone-900 mb-1">Groups</h1>
-      <p class="text-sm text-stone-500">Nhóm tools và phân quyền theo từng đội.</p>
+      <h2 class="text-xl font-semibold text-stone-900">Groups</h2>
+      <p class="text-sm text-stone-500 mt-1">Bundle tools by team and grant access member-by-member.</p>
     </div>
     <button type="button" @click="showCreate = true"
-            class="px-4 py-1.5 text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-full">
-      + Tạo group
+            class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-full hover:bg-orange-100 hover:border-orange-300 transition-all">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New group
     </button>
   </div>
 
   {% if messages %}
-  <div class="mb-4 space-y-2">
+  <div class="mb-5 space-y-2">
     {% for m in messages %}
-    <div class="text-sm px-4 py-2 rounded-lg {% if m.tags == 'error' %}bg-red-50 text-red-700{% else %}bg-green-50 text-green-700{% endif %}">{{ m }}</div>
+    <div class="text-sm px-4 py-2.5 rounded-xl border {% if m.tags == 'error' %}bg-red-50 border-red-200 text-red-700{% else %}bg-emerald-50 border-emerald-200 text-emerald-700{% endif %}">{{ m }}</div>
     {% endfor %}
   </div>
   {% endif %}
 
+  {% if groups %}
   <div class="space-y-3">
     {% for g in groups %}
-    <div class="bg-white rounded-xl border border-stone-200 p-5 flex items-start gap-4">
-      <div class="text-3xl">{{ g.icon_emoji }}</div>
+    <div class="group bg-white rounded-xl border border-stone-200 p-4 transition-all duration-200 hover:shadow flex items-center gap-4">
+      <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-stone-50 border border-stone-100 flex items-center justify-center text-xl">
+        {{ g.icon_emoji }}
+      </div>
       <div class="flex-1 min-w-0">
-        <h3 class="text-base font-semibold text-stone-900">{{ g.name }}</h3>
-        {% if g.description %}<p class="text-xs text-stone-500 mt-0.5">{{ g.description }}</p>{% endif %}
-        <div class="flex gap-4 mt-2 text-xs text-stone-500">
-          <span>🔧 <strong>{{ g.tools.count }}</strong> tool{{ g.tools.count|pluralize }}</span>
-          <span>👥 <strong>{{ g.access_grants.count }}</strong> member{{ g.access_grants.count|pluralize }} có quyền</span>
+        <h3 class="text-sm font-semibold text-stone-900 truncate">{{ g.name }}</h3>
+        {% if g.description %}
+        <p class="text-xs text-stone-500 mt-0.5 truncate">{{ g.description }}</p>
+        {% endif %}
+        <div class="flex items-center gap-4 mt-1.5 text-xs text-stone-400">
+          <span class="inline-flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+            {{ g.tools.count }} tool{{ g.tools.count|pluralize }}
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            {{ g.access_grants.count }} member{{ g.access_grants.count|pluralize }}
+          </span>
         </div>
       </div>
       <a href="{% url 'tools:group_manage' workspace_id=workspace_id group_id=g.id %}"
-         class="px-3 py-1.5 text-xs font-semibold text-stone-700 bg-stone-50 border border-stone-200 rounded-full hover:bg-stone-100">
-        Quản lý →
+         class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-stone-700 bg-stone-50 border border-stone-200 rounded-full hover:bg-stone-100">
+        Manage
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </a>
-    </div>
-    {% empty %}
-    <div class="bg-white rounded-xl border border-stone-200 p-12 text-center">
-      <div class="text-5xl mb-3">📁</div>
-      <h3 class="text-base font-semibold text-stone-900 mb-1">Chưa có group nào</h3>
-      <p class="text-sm text-stone-500 mb-4">Tạo group đầu tiên để phân quyền tools theo team.</p>
-      <button type="button" @click="showCreate = true"
-              class="px-4 py-1.5 text-sm font-semibold text-white bg-orange-500 rounded-full hover:bg-orange-600">
-        + Tạo group
-      </button>
     </div>
     {% endfor %}
   </div>
+  {% else %}
+  <div class="text-center py-16 px-6">
+    <div class="mx-auto w-16 h-16 rounded-2xl bg-orange-50 flex items-center justify-center mb-5">
+      <svg class="w-8 h-8 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+    </div>
+    <h3 class="text-base font-semibold text-stone-900 mb-2">No groups yet</h3>
+    <p class="text-sm text-stone-500 max-w-sm mx-auto mb-6">Create your first group to organise tools by team and control which members can launch them.</p>
+    <button type="button" @click="showCreate = true"
+            class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-full hover:bg-orange-100">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Create your first group
+    </button>
+  </div>
+  {% endif %}
 
   <!-- Create modal -->
-  <div x-show="showCreate" x-cloak @keydown.escape.window="showCreate = false"
-       class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+  <div x-show="showCreate" x-cloak x-transition.opacity @keydown.escape.window="showCreate = false"
+       class="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-50 p-4">
     <div @click.away="showCreate = false"
          class="bg-white rounded-2xl shadow-xl w-full max-w-md">
       <form method="post" action="{% url 'tools:group_create' workspace_id=workspace_id %}" class="p-6">
         {% csrf_token %}
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-bold text-stone-900">Tạo group mới</h2>
-          <button type="button" @click="showCreate = false" class="text-stone-400 hover:text-stone-700">✕</button>
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h2 class="text-base font-semibold text-stone-900">New group</h2>
+            <p class="text-xs text-stone-500 mt-0.5">Group tools and grant access per member.</p>
+          </div>
+          <button type="button" @click="showCreate = false"
+                  class="w-8 h-8 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 inline-flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
 
-        <label class="block text-xs font-semibold text-stone-700 mb-1">Icon</label>
-        <input type="text" name="icon_emoji" value="📁" maxlength="8"
-               class="form-input-styled mb-3 w-20 text-center text-xl">
+        <div class="flex gap-3 mb-3">
+          <div>
+            <label class="block text-xs font-semibold text-stone-700 mb-1">Icon</label>
+            <input type="text" name="icon_emoji" value="📁" maxlength="8"
+                   class="form-input-styled w-16 text-center text-xl">
+          </div>
+          <div class="flex-1">
+            <label class="block text-xs font-semibold text-stone-700 mb-1">Group name</label>
+            <input type="text" name="name" required maxlength="120"
+                   placeholder="Design Team"
+                   class="form-input-styled w-full">
+          </div>
+        </div>
 
-        <label class="block text-xs font-semibold text-stone-700 mb-1">Tên group</label>
-        <input type="text" name="name" required maxlength="120"
-               placeholder="VD: Team Thiết Kế"
-               class="form-input-styled mb-3 w-full">
-
-        <label class="block text-xs font-semibold text-stone-700 mb-1">Mô tả</label>
+        <label class="block text-xs font-semibold text-stone-700 mb-1">Description</label>
         <input type="text" name="description" maxlength="300"
-               placeholder="Cho team thiết kế dùng Canva và Magnific"
+               placeholder="Designers using Canva and Magnific"
                class="form-input-styled mb-3 w-full">
 
-        <label class="block text-xs font-semibold text-stone-700 mb-1">Màu sắc</label>
-        <select name="color" class="form-input-styled mb-4 w-full">
-          <option value="orange">Cam</option><option value="pink">Hồng</option>
-          <option value="blue">Xanh dương</option><option value="green">Xanh lá</option>
-          <option value="purple">Tím</option><option value="amber">Vàng</option>
-          <option value="teal">Teal</option><option value="stone">Xám</option>
+        <label class="block text-xs font-semibold text-stone-700 mb-1">Accent colour</label>
+        <select name="color" class="form-input-styled mb-5 w-full">
+          <option value="orange">Orange</option><option value="pink">Pink</option>
+          <option value="blue">Blue</option><option value="green">Green</option>
+          <option value="purple">Purple</option><option value="amber">Amber</option>
+          <option value="teal">Teal</option><option value="stone">Stone</option>
         </select>
 
         <div class="flex justify-end gap-2 pt-4 border-t border-stone-100">
           <button type="button" @click="showCreate = false"
-                  class="px-4 py-1.5 text-sm text-stone-600 hover:bg-stone-50 rounded-full">Huỷ</button>
+                  class="px-4 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-50 rounded-full">Cancel</button>
           <button type="submit"
-                  class="px-4 py-1.5 text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-full">
-            Tạo group
+                  class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-full hover:bg-orange-100">
+            Create group
           </button>
         </div>
       </form>

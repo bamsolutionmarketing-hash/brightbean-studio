@@ -3,51 +3,40 @@
 {% block page_title %}Team Tools{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto p-6" x-data="toolsPage()">
+<div class="max-w-5xl" x-data="toolsPage()">
 
   <!-- Header -->
-  <div class="flex items-start justify-between mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
     <div>
-      <div class="flex items-center gap-3 mb-1">
-        <h1 class="text-2xl font-bold text-stone-900">🧰 Team Tools</h1>
-        <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-stone-100 text-stone-600 border border-stone-200">
-          Hardened
-        </span>
-      </div>
-      <p class="text-sm text-stone-500">Tài khoản dùng chung của team — dùng xong nhớ <strong>trả tài khoản</strong>.</p>
+      <h2 class="text-xl font-semibold text-stone-900">Team Tools</h2>
+      <p class="text-sm text-stone-500 mt-1">Shared accounts opened in a hardened browser session. Cookies stay encrypted.</p>
     </div>
     {% if can_manage %}
     <div class="flex items-center gap-2">
       <a href="{% url 'tools:group_list' workspace_id=workspace_id %}"
-         class="px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 rounded-full border border-stone-200">
+         class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-stone-600 bg-white border border-stone-200 rounded-full hover:bg-stone-50 transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
         Groups
       </a>
       <a href="{% url 'tools:history' workspace_id=workspace_id %}"
-         class="px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 rounded-full border border-stone-200">
+         class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-stone-600 bg-white border border-stone-200 rounded-full hover:bg-stone-50 transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         History
       </a>
       <button type="button" @click="showUpload = true"
-              class="px-4 py-1.5 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-pink-500 rounded-full hover:shadow-md">
-        + Add Tool
+              class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-full hover:bg-orange-100 hover:border-orange-300 transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Tool
       </button>
     </div>
     {% endif %}
   </div>
 
-  <!-- Security note -->
-  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start gap-3 text-sm text-stone-700">
-    <span class="text-xl">🔒</span>
-    <div>
-      <strong>An toàn:</strong> Trình duyệt mở ra đã bị khoá — không thể cài extension,
-      không mở được DevTools, không xem được cookies. Mọi phiên dùng đều được ghi log.
-    </div>
-  </div>
-
   <!-- Status banner -->
   <template x-if="status">
-    <div class="mb-6 p-4 rounded-xl border" :class="{
-      'bg-blue-50 border-blue-200 text-blue-800': status.kind === 'info',
-      'bg-green-50 border-green-200 text-green-800': status.kind === 'ok',
+    <div class="mb-5 px-4 py-3 rounded-xl text-sm border" :class="{
+      'bg-stone-50 border-stone-200 text-stone-700': status.kind === 'info',
+      'bg-emerald-50 border-emerald-200 text-emerald-800': status.kind === 'ok',
       'bg-red-50 border-red-200 text-red-800': status.kind === 'err'
     }">
       <span x-text="status.msg"></span>
@@ -57,57 +46,70 @@
   {% if sections or public_tools %}
 
     {% for section in sections %}
-    <div class="mb-8">
+    <section class="mb-8">
       <div class="flex items-center gap-2 mb-3">
-        <span class="text-xl">{{ section.group.icon_emoji }}</span>
-        <h2 class="text-base font-bold text-stone-800">{{ section.group.name }}</h2>
-        <span class="text-xs text-stone-400">·  {{ section.tools|length }} tool{{ section.tools|length|pluralize }}</span>
+        <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-stone-100 text-base">{{ section.group.icon_emoji }}</span>
+        <h3 class="text-sm font-semibold text-stone-900">{{ section.group.name }}</h3>
+        <span class="text-xs text-stone-400">{{ section.tools|length }} tool{{ section.tools|length|pluralize }}</span>
         {% if can_manage %}
         <a href="{% url 'tools:group_manage' workspace_id=workspace_id group_id=section.group.id %}"
-           class="ml-auto text-xs text-stone-500 hover:text-stone-800">Quản lý →</a>
+           class="ml-auto text-xs font-medium text-stone-500 hover:text-stone-800">Manage →</a>
         {% endif %}
       </div>
       {% if section.tools %}
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {% for tool in section.tools %}
         {% include "tools/_tool_card.html" with tool=tool can_manage=can_manage workspace_id=workspace_id %}
         {% endfor %}
       </div>
       {% else %}
-      <p class="text-xs text-stone-400 italic">Chưa có tool nào trong nhóm này.</p>
+      <p class="text-xs text-stone-400 italic ml-9">No tools assigned yet.</p>
       {% endif %}
-    </div>
+    </section>
     {% endfor %}
 
     {% if public_tools %}
-    <div class="mb-8">
+    <section class="mb-8">
       <div class="flex items-center gap-2 mb-3">
-        <span class="text-xl">🔓</span>
-        <h2 class="text-base font-bold text-stone-800">Public</h2>
-        <span class="text-xs text-stone-400">·  mọi member đều dùng được</span>
+        <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-stone-100 text-base">🔓</span>
+        <h3 class="text-sm font-semibold text-stone-900">Public</h3>
+        <span class="text-xs text-stone-400">available to every member</span>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {% for tool in public_tools %}
         {% include "tools/_tool_card.html" with tool=tool can_manage=can_manage workspace_id=workspace_id %}
         {% endfor %}
       </div>
-    </div>
+    </section>
     {% endif %}
 
   {% else %}
-  <div class="bg-white rounded-xl border border-stone-200 p-12 text-center">
-    <div class="text-5xl mb-3">🧰</div>
-    <h3 class="text-base font-semibold text-stone-900 mb-1">Chưa có tool nào</h3>
-    <p class="text-sm text-stone-500 mb-4">
-      {% if can_manage %}Thêm tool đầu tiên — paste cookies từ J2TEAM extension.
-      {% else %}Bạn chưa được cấp quyền dùng tool nào. Liên hệ admin để được thêm vào group.{% endif %}
+  <div class="text-center py-16 px-6">
+    <div class="mx-auto w-16 h-16 rounded-2xl bg-orange-50 flex items-center justify-center mb-5">
+      <svg class="w-8 h-8 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+    </div>
+    <h3 class="text-base font-semibold text-stone-900 mb-2">No tools yet</h3>
+    <p class="text-sm text-stone-500 max-w-sm mx-auto mb-6">
+      {% if can_manage %}Add the first shared tool — paste cookies exported from the J2TEAM extension and your team can launch it in a locked-down browser.
+      {% else %}You don't have access to any tools yet. Ask a workspace admin to grant you access.{% endif %}
     </p>
     {% if can_manage %}
     <button type="button" @click="showUpload = true"
-            class="px-4 py-1.5 text-sm font-semibold text-white bg-orange-500 rounded-full hover:bg-orange-600">
-      + Add Tool
+            class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-full hover:bg-orange-100 transition-all">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Your First Tool
     </button>
     {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Security footer -->
+  {% if sections or public_tools %}
+  <div class="mt-6 pt-4 border-t border-stone-200 flex items-center gap-2">
+    <svg class="w-3.5 h-3.5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+    <p class="text-xs text-stone-400">
+      Browsers launch with extensions disabled, DevTools blocked, and cookies wiped on return. Every session is logged.
+    </p>
   </div>
   {% endif %}
 
@@ -121,40 +123,34 @@ function toolsPage() {
   return {
     status: null,
     showUpload: false,
-    async launch(toolId) {
-      this.status = { kind: 'info', msg: 'Đang mở trình duyệt khoá…' };
+    async _post(url, body = {}) {
       const fd = new FormData();
+      Object.entries(body).forEach(([k, v]) => fd.append(k, v));
       fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-      const r = await fetch(`/tools/{{ workspace_id }}/${toolId}/launch/`, {
-        method: 'POST', body: fd, credentials: 'same-origin'
-      });
-      const data = await r.json();
+      const r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
+      return r.json();
+    },
+    async launch(toolId) {
+      this.status = { kind: 'info', msg: 'Opening hardened browser…' };
+      const data = await this._post(`/tools/{{ workspace_id }}/${toolId}/launch/`);
       if (data.ok) {
         this.status = { kind: 'ok', msg: data.message };
-        setTimeout(() => window.location.reload(), 1500);
+        setTimeout(() => window.location.reload(), 1200);
       } else {
-        this.status = { kind: 'err', msg: data.error || 'Không mở được.' };
+        this.status = { kind: 'err', msg: data.error || 'Could not launch tool.' };
       }
     },
     async returnTool(toolId) {
-      if (!confirm('Trả tài khoản này? Phiên sẽ kết thúc và xoá cookies tạm.')) return;
-      const fd = new FormData();
-      fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-      const r = await fetch(`/tools/{{ workspace_id }}/${toolId}/return/`, {
-        method: 'POST', body: fd, credentials: 'same-origin'
-      });
-      const data = await r.json();
+      if (!confirm('Return this tool? Your session will end and temp cookies will be wiped.')) return;
+      const data = await this._post(`/tools/{{ workspace_id }}/${toolId}/return/`);
       if (data.ok) { window.location.reload(); }
-      else { this.status = { kind: 'err', msg: data.error || 'Lỗi.' }; }
+      else { this.status = { kind: 'err', msg: data.error || 'Could not return.' }; }
     },
     async forceReturn(toolId) {
-      if (!confirm('Force-return: ngắt phiên người đang dùng?')) return;
-      const fd = new FormData();
-      fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-      const r = await fetch(`/tools/{{ workspace_id }}/${toolId}/force-return/`, {
-        method: 'POST', body: fd, credentials: 'same-origin'
-      });
-      if ((await r.json()).ok) window.location.reload();
+      if (!confirm('Force-return: end the active session for the current user?')) return;
+      const data = await this._post(`/tools/{{ workspace_id }}/${toolId}/force-return/`);
+      if (data.ok) window.location.reload();
+      else this.status = { kind: 'err', msg: data.error };
     }
   }
 }
