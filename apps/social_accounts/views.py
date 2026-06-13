@@ -810,6 +810,7 @@ def quick_connect_launch(request, workspace_id):
         account_platform_id=account_id,
         account_name=account_label,
         oauth_access_token=account_id,  # browser providers use account_id as the "token"
+        auth_method=SocialAccount.AuthMethod.BROWSER,
         connection_status=SocialAccount.ConnectionStatus.CONNECTED,
     )
 

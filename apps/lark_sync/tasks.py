@@ -186,36 +186,49 @@ def _create_post_for_file(
     workspace, file_path, file_name, caption, target_platforms,
     captions_by_platform: dict | None = None,
 ):
-    """Create Post + MediaAsset + PlatformPosts scheduled for immediate publish."""
+    """Create Post + MediaAsset + PlatformPosts.
+
+    When LARK_AUTO_PUBLISH is True, PlatformPosts are scheduled for immediate
+    publish; otherwise they are left as drafts for review in the dashboard.
+    """
     from django.core.files import File
 
-    from apps.composer.models import Post, PostMedia
+    # PlatformPost, Post and PostMedia all live in apps.composer.models.
+    from apps.composer.models import PlatformPost, Post, PostMedia
     from apps.media_library.models import MediaAsset
-    from apps.publisher.models import PlatformPost
     from apps.social_accounts.models import SocialAccount
 
     captions_by_platform = captions_by_platform or {}
+    auto_publish = getattr(settings, "LARK_AUTO_PUBLISH", True)
+    now = timezone.now()
 
     post = Post.objects.create(
         workspace=workspace,
         caption=caption,
-        scheduled_at=timezone.now(),
+        scheduled_at=now if auto_publish else None,
     )
 
     ext = os.path.splitext(file_name)[1].lower()
     media_type = "video" if ext in {".mp4", ".mov", ".avi", ".mkv"} else "image"
+    file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
 
     with open(file_path, "rb") as fh:
         asset = MediaAsset.objects.create(
+            organization=workspace.organization,
             workspace=workspace,
             filename=file_name,
             media_type=media_type,
+            file_size=file_size,
+            source="lark",
         )
         asset.file.save(file_name, File(fh), save=True)
 
     # PostMedia is the correct model name (related_name="media_attachments" on Post)
     PostMedia.objects.create(post=post, media_asset=asset, position=0)
 
+    status = (
+        PlatformPost.Status.SCHEDULED if auto_publish else PlatformPost.Status.DRAFT
+    )
     for platform in target_platforms:
         platform_caption = captions_by_platform.get(platform, caption)
         for account in SocialAccount.objects.filter(
@@ -226,8 +239,8 @@ def _create_post_for_file(
             PlatformPost.objects.create(
                 post=post,
                 social_account=account,
-                scheduled_at=timezone.now(),
-                status="scheduled",
+                scheduled_at=now if auto_publish else None,
+                status=status,
                 # platform_specific_caption is read by effective_caption
                 # which the publisher engine uses — this is how AI caption flows through
                 platform_specific_caption=platform_caption,

@@ -273,33 +273,43 @@ class PublishEngine:
         account = platform_post.social_account
         platform = account.platform
 
-        credentials = _resolve_publish_credentials(account)
-        provider = get_provider(platform, credentials)
+        # Browser-automation accounts (Quick Connect / Lark flow) publish via a
+        # persistent Playwright profile instead of an OAuth API. The access_token
+        # is the browser-profile key, not a real token, so there is no credential
+        # resolution or token refresh.
+        if getattr(account, "auth_method", "oauth") == "browser":
+            from providers import get_browser_provider
 
-        # Refresh token if expired or expiring soon (OAuth2 providers only)
-        access_token = account.oauth_access_token
-        if account.token_expires_at and account.is_token_expiring_soon and provider.auth_type == AuthType.OAUTH2:
-            try:
-                new_tokens = provider.refresh_token(account.oauth_refresh_token)
-                account.oauth_access_token = new_tokens.access_token
-                if new_tokens.refresh_token:
-                    account.oauth_refresh_token = new_tokens.refresh_token
-                if new_tokens.expires_in:
-                    account.token_expires_at = timezone.now() + timedelta(seconds=new_tokens.expires_in)
-                account.connection_status = account.ConnectionStatus.CONNECTED
-                account.save(
-                    update_fields=[
-                        "oauth_access_token",
-                        "oauth_refresh_token",
-                        "token_expires_at",
-                        "connection_status",
-                        "updated_at",
-                    ]
-                )
-                access_token = new_tokens.access_token
-                logger.info("Refreshed token for %s", account)
-            except Exception:
-                logger.exception("Token refresh failed for %s", account)
+            provider = get_browser_provider(platform)
+            access_token = account.oauth_access_token
+        else:
+            credentials = _resolve_publish_credentials(account)
+            provider = get_provider(platform, credentials)
+
+            # Refresh token if expired or expiring soon (OAuth2 providers only)
+            access_token = account.oauth_access_token
+            if account.token_expires_at and account.is_token_expiring_soon and provider.auth_type == AuthType.OAUTH2:
+                try:
+                    new_tokens = provider.refresh_token(account.oauth_refresh_token)
+                    account.oauth_access_token = new_tokens.access_token
+                    if new_tokens.refresh_token:
+                        account.oauth_refresh_token = new_tokens.refresh_token
+                    if new_tokens.expires_in:
+                        account.token_expires_at = timezone.now() + timedelta(seconds=new_tokens.expires_in)
+                    account.connection_status = account.ConnectionStatus.CONNECTED
+                    account.save(
+                        update_fields=[
+                            "oauth_access_token",
+                            "oauth_refresh_token",
+                            "token_expires_at",
+                            "connection_status",
+                            "updated_at",
+                        ]
+                    )
+                    access_token = new_tokens.access_token
+                    logger.info("Refreshed token for %s", account)
+                except Exception:
+                    logger.exception("Token refresh failed for %s", account)
 
         # Download media from storage (S3/cloud) to temp files for upload
         # and collect public URLs (presigned R2 / absolute) for providers

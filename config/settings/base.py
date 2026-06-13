@@ -65,6 +65,7 @@ LOCAL_APPS = [
     "apps.client_portal",
     "apps.onboarding",
     "apps.tools",
+    "apps.lark_sync",
     "theme",
 ]
 
@@ -181,6 +182,12 @@ if STORAGE_BACKEND.lower() == "s3":
         "CacheControl": "max-age=86400",
     }
 else:
+    # Local filesystem storage. Django 5 requires an explicit "default" entry in
+    # STORAGES — without it any media upload raises InvalidStorageError, which
+    # breaks self-hosted installs (Lark sync, media library uploads, etc.).
+    STORAGES["default"] = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    }
     MEDIA_ROOT = env("MEDIA_ROOT", default=str(BASE_DIR / "media"))
     MEDIA_URL = "/media/"
 
@@ -377,6 +384,24 @@ PLATFORM_CREDENTIALS_FROM_ENV = {
     # credentials apply.
     "mastodon": {},
 }
+
+# ---------------------------------------------------------------
+# Lark / Feishu Drive sync (apps.lark_sync)
+# An internal Lark app provides app_id/app_secret. The watched folder(s) are
+# configured per-workspace in the admin via LarkWatchConfig. The background
+# worker (process_tasks) polls every LARK_POLL_INTERVAL seconds.
+# ---------------------------------------------------------------
+LARK_APP_ID = env("LARK_APP_ID", default="")
+LARK_APP_SECRET = env("LARK_APP_SECRET", default="")
+LARK_USE_FEISHU = env.bool("LARK_USE_FEISHU", default=False)
+LARK_POLL_INTERVAL = env.int("LARK_POLL_INTERVAL", default=300)
+# When True, Lark-created posts are scheduled immediately (auto-publish).
+# When False, they are created as drafts for review in the dashboard first.
+LARK_AUTO_PUBLISH = env.bool("LARK_AUTO_PUBLISH", default=True)
+
+# Telegram cloud storage (optional media archive — see providers/telegram_storage.py)
+TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", default="")
+TELEGRAM_STORAGE_CHANNEL_ID = env("TELEGRAM_STORAGE_CHANNEL_ID", default="")
 
 # Webhook verification
 FACEBOOK_WEBHOOK_VERIFY_TOKEN = env("FACEBOOK_WEBHOOK_VERIFY_TOKEN", default="")

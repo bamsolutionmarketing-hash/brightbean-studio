@@ -35,6 +35,9 @@ class AuthType(enum.Enum):
     OAUTH2 = "oauth2"
     SESSION = "session"
     INSTANCE_OAUTH = "instance_oauth"
+    # Browser-automation providers (Playwright). The "token" is a persistent
+    # browser-profile key rather than an OAuth credential.
+    CUSTOM = "custom"
 
 
 @dataclass(frozen=True)

@@ -15,6 +15,10 @@ class SocialAccount(models.Model):
         DISCONNECTED = "disconnected", "Disconnected"
         ERROR = "error", "Error"
 
+    class AuthMethod(models.TextChoices):
+        OAUTH = "oauth", "OAuth"
+        BROWSER = "browser", "Browser (Playwright)"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workspace = models.ForeignKey(
         "workspaces.Workspace",
@@ -24,6 +28,14 @@ class SocialAccount(models.Model):
     platform = models.CharField(
         max_length=30,
         choices=PlatformCredential.Platform.choices,
+    )
+    # How this account publishes: standard OAuth API, or a persistent browser
+    # profile driven by Playwright (Quick Connect / Lark flow). For browser
+    # accounts, oauth_access_token holds the browser-profile key, not a token.
+    auth_method = models.CharField(
+        max_length=10,
+        choices=AuthMethod.choices,
+        default=AuthMethod.OAUTH,
     )
     account_platform_id = models.CharField(
         max_length=255,
