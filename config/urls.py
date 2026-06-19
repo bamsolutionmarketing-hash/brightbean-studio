@@ -29,6 +29,8 @@ urlpatterns = [
     path("workspace/<uuid:workspace_id>/settings/clients/", include("apps.client_portal.urls_admin")),
     # Media Library
     path("workspace/<uuid:workspace_id>/media/", include("apps.media_library.urls")),
+    # Analytics
+    path("workspace/<uuid:workspace_id>/analytics/", include("apps.analytics.urls")),
     path("approvals/org/", org_approval_queue, name="org_approval_queue"),
     # Client Portal (Stream F)
     path("portal/", include("apps.client_portal.urls")),

@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}Analytics — {{ workspace.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-2xl font-bold text-stone-100">Analytics</h1>
+      <p class="text-stone-400 text-sm mt-1">{{ workspace.name }}</p>
+    </div>
+    <!-- Period selector -->
+    <div class="flex items-center gap-2">
+      {% for d in "7,14,30,90"|split:"," %}
+      <a href="?days={{ d }}"
+         class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
+                {% if days == d|add:0 %}bg-orange-500 text-white{% else %}bg-stone-800 text-stone-400 hover:text-stone-100{% endif %}">
+        {{ d }}d
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+    <div class="bg-stone-800 border border-stone-700 rounded-xl p-4 col-span-2 sm:col-span-1">
+      <p class="text-xs text-stone-400 uppercase tracking-wide mb-1">Published</p>
+      <p class="text-3xl font-bold text-green-400">{{ published }}</p>
+    </div>
+    <div class="bg-stone-800 border border-stone-700 rounded-xl p-4">
+      <p class="text-xs text-stone-400 uppercase tracking-wide mb-1">Success Rate</p>
+      <p class="text-3xl font-bold {% if success_rate >= 90 %}text-green-400{% elif success_rate >= 70 %}text-yellow-400{% else %}text-red-400{% endif %}">
+        {{ success_rate }}%
+      </p>
+    </div>
+    <div class="bg-stone-800 border border-stone-700 rounded-xl p-4">
+      <p class="text-xs text-stone-400 uppercase tracking-wide mb-1">Total</p>
+      <p class="text-3xl font-bold text-stone-100">{{ total }}</p>
+    </div>
+    <div class="bg-stone-800 border border-stone-700 rounded-xl p-4">
+      <p class="text-xs text-stone-400 uppercase tracking-wide mb-1">Scheduled</p>
+      <p class="text-3xl font-bold text-blue-400">{{ scheduled }}</p>
+    </div>
+    <div class="bg-stone-800 border border-stone-700 rounded-xl p-4">
+      <p class="text-xs text-stone-400 uppercase tracking-wide mb-1">Drafts</p>
+      <p class="text-3xl font-bold text-stone-400">{{ draft }}</p>
+    </div>
+    <div class="bg-stone-800 border border-stone-700 rounded-xl p-4">
+      <p class="text-xs text-stone-400 uppercase tracking-wide mb-1">Failed</p>
+      <p class="text-3xl font-bold {% if failed > 0 %}text-red-400{% else %}text-stone-500{% endif %}">
+        {{ failed }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Lark highlight -->
+  {% if lark_published %}
+  <div class="bg-orange-500/10 border border-orange-500/30 rounded-xl px-5 py-3 mb-8 flex items-center gap-3">
+    <span class="text-xl">🦅</span>
+    <p class="text-orange-300 text-sm">
+      <strong class="text-orange-200">{{ lark_published }}</strong> bài được đăng tự động từ Lark Drive trong {{ days }} ngày qua.
+    </p>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+    <!-- Daily published chart -->
+    <div class="bg-stone-800 border border-stone-700 rounded-xl p-5">
+      <h2 class="text-sm font-semibold text-stone-300 mb-4">Bài đã đăng mỗi ngày</h2>
+      {% if daily_counts %}
+      <canvas id="dailyChart" height="180"></canvas>
+      {% else %}
+      <div class="h-40 flex items-center justify-center text-stone-500 text-sm">Chưa có dữ liệu</div>
+      {% endif %}
+    </div>
+
+    <!-- Hour heatmap -->
+    <div class="bg-stone-800 border border-stone-700 rounded-xl p-5">
+      <h2 class="text-sm font-semibold text-stone-300 mb-1">Giờ đăng hiệu quả nhất</h2>
+      {% if best_hour is not None %}
+      <p class="text-xs text-stone-500 mb-4">Đỉnh: {{ best_hour }}:00 – {{ best_hour|add:1 }}:00</p>
+      {% endif %}
+      {% if hour_counts %}
+      <canvas id="hourChart" height="180"></canvas>
+      {% else %}
+      <div class="h-40 flex items-center justify-center text-stone-500 text-sm">Chưa có dữ liệu</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- By platform -->
+  <div class="bg-stone-800 border border-stone-700 rounded-xl p-5 mb-8">
+    <h2 class="text-sm font-semibold text-stone-300 mb-4">Theo nền tảng</h2>
+    {% if by_platform %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs text-stone-500 uppercase tracking-wide border-b border-stone-700">
+            <th class="pb-3 pr-6">Platform</th>
+            <th class="pb-3 pr-6 text-right">Tổng</th>
+            <th class="pb-3 pr-6 text-right">Published</th>
+            <th class="pb-3 pr-6 text-right">Failed</th>
+            <th class="pb-3">Success rate</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-stone-700/50">
+          {% for row in by_platform %}
+          {% with rate=row.published|floatformat:0 %}
+          <tr class="hover:bg-stone-700/30 transition-colors">
+            <td class="py-3 pr-6 font-medium text-stone-200">
+              <span class="capitalize">{{ row.social_account__platform }}</span>
+            </td>
+            <td class="py-3 pr-6 text-right text-stone-400">{{ row.total }}</td>
+            <td class="py-3 pr-6 text-right text-green-400 font-semibold">{{ row.published }}</td>
+            <td class="py-3 pr-6 text-right {% if row.failed > 0 %}text-red-400{% else %}text-stone-500{% endif %}">
+              {{ row.failed }}
+            </td>
+            <td class="py-3">
+              {% if row.total > 0 %}
+              {% with pct=row.published|floatformat:0 %}
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-stone-700 rounded-full h-1.5 max-w-24">
+                  <div class="h-1.5 rounded-full bg-green-500"
+                       style="width: {% widthratio row.published row.total 100 %}%"></div>
+                </div>
+                <span class="text-xs text-stone-400">{% widthratio row.published row.total 100 %}%</span>
+              </div>
+              {% endwith %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-stone-500 text-sm">Chưa có bài nào trong khoảng thời gian này.</p>
+    {% endif %}
+  </div>
+
+  <!-- Recent failures -->
+  {% if recent_failures %}
+  <div class="bg-stone-800 border border-red-500/20 rounded-xl p-5">
+    <h2 class="text-sm font-semibold text-red-400 mb-4">⚠️ Bài đăng thất bại gần đây</h2>
+    <div class="space-y-3">
+      {% for pp in recent_failures %}
+      <div class="flex items-start gap-3 bg-stone-900/60 rounded-lg px-4 py-3">
+        <span class="text-stone-500 text-xs mt-0.5 shrink-0">{{ pp.updated_at|date:"d/m H:i" }}</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-stone-300 text-sm font-medium capitalize truncate">
+            {{ pp.social_account.platform }}
+            {% if pp.post.caption %}— {{ pp.post.caption|truncatechars:60 }}{% endif %}
+          </p>
+          {% if pp.publish_error %}
+          <p class="text-red-400 text-xs mt-1 truncate">{{ pp.publish_error|truncatechars:120 }}</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.color = '#78716c';
+Chart.defaults.borderColor = '#292524';
+
+const orangeGrad = (ctx) => {
+  const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 200);
+  g.addColorStop(0, 'rgba(249,115,22,.35)');
+  g.addColorStop(1, 'rgba(249,115,22,0)');
+  return g;
+};
+
+{% if daily_counts %}
+new Chart(document.getElementById('dailyChart'), {
+  type: 'line',
+  data: {
+    labels: {{ daily_labels|safe }},
+    datasets: [{
+      label: 'Published',
+      data: {{ daily_counts|safe }},
+      borderColor: '#f97316',
+      backgroundColor: orangeGrad,
+      borderWidth: 2,
+      tension: 0.4,
+      fill: true,
+      pointRadius: 3,
+      pointBackgroundColor: '#f97316',
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#292524' }, ticks: { maxTicksLimit: 8 } },
+      y: { grid: { color: '#292524' }, beginAtZero: true, ticks: { precision: 0 } },
+    }
+  }
+});
+{% endif %}
+
+{% if hour_counts %}
+new Chart(document.getElementById('hourChart'), {
+  type: 'bar',
+  data: {
+    labels: {{ hour_labels|safe }},
+    datasets: [{
+      label: 'Posts',
+      data: {{ hour_counts|safe }},
+      backgroundColor: {{ hour_counts|safe }}.map((v, i) => {
+        const max = Math.max(...{{ hour_counts|safe }});
+        return v === max ? '#f97316' : 'rgba(249,115,22,.25)';
+      }),
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+      y: { grid: { color: '#292524' }, beginAtZero: true, ticks: { precision: 0 } },
+    }
+  }
+});
+{% endif %}
+</script>
+{% endblock %}

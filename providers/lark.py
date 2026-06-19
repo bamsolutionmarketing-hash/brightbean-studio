@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -115,7 +117,13 @@ def resolve_platforms_from_folder_and_tags(
     file_tags: list[str],
     all_platforms: list[str],
 ) -> list[str]:
-    """Priority: file tags > folder name > all platforms."""
+    """Priority: file tags > smart folder name > all platforms.
+
+    Tags always win. Folder name supports multi-platform names like
+    'facebook_instagram' or 'all'. Folders prefixed with '_' or named
+    'drafts' are skipped (return []).
+    """
+    # 1. Tags win
     tag_platforms = []
     for tag in file_tags:
         normalized = PLATFORM_ALIASES.get(tag.lower())
@@ -125,14 +133,65 @@ def resolve_platforms_from_folder_and_tags(
             tag_platforms.append(normalized)
     if tag_platforms:
         return list(dict.fromkeys(tag_platforms))
-    folder_lower = folder_name.lower().strip()
-    if folder_lower == "all":
-        return list(all_platforms)
-    p = PLATFORM_ALIASES.get(folder_lower)
-    if p and p in all_platforms:
-        return [p]
-    return list(all_platforms)
+
+    # 2. Smart folder routing
+    return smart_folder_platforms(folder_name, all_platforms)
 
 
 def file_fingerprint(file_token: str, modified_time: str) -> str:
     return hashlib.md5(f"{file_token}:{modified_time}".encode()).hexdigest()
+
+
+# Patterns for schedule embedded in filename:
+#   product_2026-07-01.jpg              → 2026-07-01 00:00 local
+#   product_2026-07-01-08h30.mp4        → 2026-07-01 08:30
+#   product_2026-07-01-14:00.jpg        → 2026-07-01 14:00
+_SCHEDULE_RE = re.compile(
+    r"_(\d{4}-\d{2}-\d{2})(?:[_-](\d{2})[h:](\d{2}))?(?=\.\w+$)", re.IGNORECASE
+)
+
+
+def parse_schedule_from_filename(filename: str) -> datetime | None:
+    """Extract a scheduled datetime embedded in a Lark filename.
+
+    Supported formats (before the file extension):
+      photo_2026-07-01.jpg              → 2026-07-01 00:00
+      photo_2026-07-01-08h30.jpg        → 2026-07-01 08:30
+      photo_2026-07-01-14:00.jpg        → 2026-07-01 14:00
+    """
+    m = _SCHEDULE_RE.search(filename)
+    if not m:
+        return None
+    date_str, hour, minute = m.group(1), m.group(2) or "00", m.group(3) or "00"
+    try:
+        return datetime.strptime(f"{date_str} {hour}:{minute}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return None
+
+
+def smart_folder_platforms(folder_name: str, all_platforms: list[str]) -> list[str]:
+    """Resolve platforms purely from a folder name, supporting multi-platform folders.
+
+    Examples:
+      'facebook'           → ['facebook']
+      'instagram'          → ['instagram']
+      'facebook_instagram' → ['facebook', 'instagram']
+      'all'                → all_platforms
+      'drafts' / '_skip'   → []  (prefix _ or word 'draft' = skip)
+    """
+    name = folder_name.strip().lower()
+    # Convention: underscore-prefixed folders or 'draft*' are skipped
+    if name.startswith("_") or name.startswith("draft"):
+        return []
+    if name == "all":
+        return list(all_platforms)
+    # Try splitting on common separators: _ + &
+    parts = re.split(r"[_+&,]+", name)
+    resolved = []
+    for part in parts:
+        canonical = PLATFORM_ALIASES.get(part.strip())
+        if canonical == "all":
+            return list(all_platforms)
+        if canonical and canonical in all_platforms:
+            resolved.append(canonical)
+    return list(dict.fromkeys(resolved)) if resolved else list(all_platforms)

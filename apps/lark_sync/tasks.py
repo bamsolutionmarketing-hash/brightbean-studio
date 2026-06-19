@@ -52,6 +52,11 @@ def _poll_lark_folder(config) -> int:
 
     processed_count = 0
     for folder in folders_to_scan:
+        # Skip draft/private folders (prefix _ or name starts with 'draft')
+        fname = folder["name"].strip().lower()
+        if fname.startswith("_") or fname.startswith("draft"):
+            logger.debug("Skipping draft folder: %s", folder["name"])
+            continue
         try:
             files = client.list_media_files(folder["token"])
         except Exception:
@@ -127,6 +132,16 @@ def _process_lark_file(client, file_info, folder, fingerprint, config, existing)
     # Use the first platform's caption as the default post caption
     caption = next(iter(captions_by_platform.values()), "")
 
+    # Parse schedule embedded in filename: photo_2026-07-01-08h30.jpg
+    from providers.lark import parse_schedule_from_filename
+    from django.utils import timezone as tz
+
+    scheduled_at = None
+    naive_dt = parse_schedule_from_filename(file_name)
+    if naive_dt:
+        scheduled_at = tz.make_aware(naive_dt)
+        logger.info("Parsed schedule from filename '%s': %s", file_name, scheduled_at)
+
     post = _create_post_for_file(
         workspace=config.workspace,
         file_path=dest_path,
@@ -134,6 +149,7 @@ def _process_lark_file(client, file_info, folder, fingerprint, config, existing)
         caption=caption,
         target_platforms=target_platforms,
         captions_by_platform=captions_by_platform,
+        scheduled_at=scheduled_at,
     )
 
     # Upload to Telegram for long-term cloud storage (free, unlimited)
@@ -185,15 +201,18 @@ def _upload_to_telegram(file_path: str, file_name: str, caption: str) -> dict:
 def _create_post_for_file(
     workspace, file_path, file_name, caption, target_platforms,
     captions_by_platform: dict | None = None,
+    scheduled_at=None,
 ):
     """Create Post + MediaAsset + PlatformPosts.
 
-    When LARK_AUTO_PUBLISH is True, PlatformPosts are scheduled for immediate
-    publish; otherwise they are left as drafts for review in the dashboard.
+    Workflow (LARK_AUTO_PUBLISH):
+      True  + scheduled_at  → status SCHEDULED at that time
+      True  + no schedule   → status SCHEDULED for now (publish immediately)
+      False + scheduled_at  → status SCHEDULED at that time (bypasses draft; filename wins)
+      False + no schedule   → status DRAFT (needs review in dashboard)
     """
     from django.core.files import File
 
-    # PlatformPost, Post and PostMedia all live in apps.composer.models.
     from apps.composer.models import PlatformPost, Post, PostMedia
     from apps.media_library.models import MediaAsset
     from apps.social_accounts.models import SocialAccount
@@ -202,10 +221,22 @@ def _create_post_for_file(
     auto_publish = getattr(settings, "LARK_AUTO_PUBLISH", True)
     now = timezone.now()
 
+    # Determine effective schedule and status
+    if scheduled_at:
+        # Filename schedule always creates a SCHEDULED post at that time
+        effective_scheduled_at = scheduled_at
+        status = PlatformPost.Status.SCHEDULED
+    elif auto_publish:
+        effective_scheduled_at = now
+        status = PlatformPost.Status.SCHEDULED
+    else:
+        effective_scheduled_at = None
+        status = PlatformPost.Status.DRAFT
+
     post = Post.objects.create(
         workspace=workspace,
         caption=caption,
-        scheduled_at=now if auto_publish else None,
+        scheduled_at=effective_scheduled_at,
     )
 
     ext = os.path.splitext(file_name)[1].lower()
@@ -223,12 +254,8 @@ def _create_post_for_file(
         )
         asset.file.save(file_name, File(fh), save=True)
 
-    # PostMedia is the correct model name (related_name="media_attachments" on Post)
     PostMedia.objects.create(post=post, media_asset=asset, position=0)
 
-    status = (
-        PlatformPost.Status.SCHEDULED if auto_publish else PlatformPost.Status.DRAFT
-    )
     for platform in target_platforms:
         platform_caption = captions_by_platform.get(platform, caption)
         for account in SocialAccount.objects.filter(
@@ -239,10 +266,8 @@ def _create_post_for_file(
             PlatformPost.objects.create(
                 post=post,
                 social_account=account,
-                scheduled_at=now if auto_publish else None,
+                scheduled_at=effective_scheduled_at,
                 status=status,
-                # platform_specific_caption is read by effective_caption
-                # which the publisher engine uses — this is how AI caption flows through
                 platform_specific_caption=platform_caption,
             )
 

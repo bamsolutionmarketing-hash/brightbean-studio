@@ -66,6 +66,7 @@ LOCAL_APPS = [
     "apps.onboarding",
     "apps.tools",
     "apps.lark_sync",
+    "apps.analytics",
     "theme",
 ]
 

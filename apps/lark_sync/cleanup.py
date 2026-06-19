@@ -64,11 +64,76 @@ def needs_cleanup() -> bool:
     return ratio >= CLEANUP_THRESHOLD
 
 
+def _archive_media_to_telegram(record) -> dict:
+    """Upload the MediaAsset attached to this record to Telegram.
+
+    Returns the telegram ref dict, or {} on failure (non-fatal).
+    """
+    if not record.post_id:
+        return {}
+    try:
+        from apps.media_library.models import MediaAsset
+        from providers.telegram_storage import upload_media
+
+        asset = (
+            MediaAsset.objects.filter(
+                postmedia__post_id=record.post_id,
+                source="lark",
+            ).first()
+        )
+        if not asset or not asset.file:
+            return {}
+
+        caption = f"[archive] {record.file_name}"
+
+        # Local storage: file is on disk
+        if hasattr(asset.file, "path"):
+            try:
+                ref = upload_media(asset.file.path, caption=caption)
+            except FileNotFoundError:
+                return {}
+        else:
+            # S3: download to temp then upload
+            import tempfile
+            import requests as req
+            with tempfile.NamedTemporaryFile(
+                suffix=os.path.splitext(record.file_name)[1] or ".bin", delete=False
+            ) as tmp:
+                tmp_path = tmp.name
+                resp = req.get(asset.file.url, timeout=120)
+                resp.raise_for_status()
+                tmp.write(resp.content)
+            try:
+                ref = upload_media(tmp_path, caption=caption)
+            finally:
+                os.unlink(tmp_path)
+
+        logger.info("Archived '%s' → Telegram msg_id=%s", record.file_name, ref.get("message_id"))
+
+        # Delete the actual file from S3/disk to free Supabase Storage quota
+        try:
+            asset.file.delete(save=False)
+        except Exception:
+            logger.warning("Could not delete file from storage for asset %s", asset.id)
+
+        return ref
+    except Exception:
+        logger.warning("Telegram archive failed for '%s' (non-fatal)", record.file_name, exc_info=True)
+        return {}
+
+
 def run_cleanup() -> int:
-    """Delete oldest ProcessedLarkFile records (and associated Telegram refs) until
-    usage drops below CLEANUP_TARGET.  Returns the number of deleted records."""
+    """Archive oldest ProcessedLarkFile records to Telegram, then remove from Supabase.
+
+    Flow per record:
+      1. If no telegram_storage yet → upload media to Telegram first (free archive).
+      2. Delete the physical file from Supabase Storage to free quota.
+      3. Detach Post FK and delete the ProcessedLarkFile row.
+
+    Post/PlatformPost records are kept so the publish history remains intact.
+    Returns the number of cleaned records.
+    """
     from .models import ProcessedLarkFile
-    from providers.telegram_storage import delete_message
 
     total = _count_rows()
     target_count = int(ROW_LIMIT * CLEANUP_TARGET)
@@ -76,22 +141,23 @@ def run_cleanup() -> int:
     if to_delete == 0:
         return 0
 
-    logger.info("Supabase cleanup: removing %d oldest ProcessedLarkFile records", to_delete)
+    logger.info("Supabase cleanup: archiving & removing %d oldest records", to_delete)
 
-    qs = ProcessedLarkFile.objects.order_by("created_at")[:to_delete]
+    qs = list(ProcessedLarkFile.objects.order_by("created_at")[:to_delete])
     deleted = 0
     for record in qs:
-        # Remove Telegram copy if we stored one
         tg = record.telegram_storage or {}
-        msg_id = tg.get("message_id")
-        channel_id = tg.get("channel_id")
-        if msg_id and channel_id:
-            delete_message(msg_id)
+        if not tg.get("message_id"):
+            tg_ref = _archive_media_to_telegram(record)
+            if tg_ref:
+                record.telegram_storage = tg_ref
+                record.save(update_fields=["telegram_storage"])
 
-        # Detach the Post FK to avoid cascade delete of content the user might still want
+        # Detach Post FK; keep Post itself for history
         record.post = None
+        record.save(update_fields=["post"])
         record.delete()
         deleted += 1
 
-    logger.info("Supabase cleanup complete: removed %d records", deleted)
+    logger.info("Supabase cleanup complete: %d records archived & removed", deleted)
     return deleted
